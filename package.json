@@ -1,22 +1,20 @@
 {
   "name": "ot-markdown-converter",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Converts my.opentext.com knowledge articles to LLM-friendly Markdown",
+  "type": "module",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "convert": "tsx src/cli/convert.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TenDorjee/ot-markdown-converter.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/TenDorjee/ot-markdown-converter/issues"
-  },
   "homepage": "https://github.com/TenDorjee/ot-markdown-converter#readme",
-  "description": "",
+  "license": "ISC",
   "dependencies": {
     "js-yaml": "^5.5.0",
     "rehype-parse": "^9.0.1",
