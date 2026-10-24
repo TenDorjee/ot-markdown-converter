@@ -11,8 +11,10 @@ import { fixFormattingWhitespace } from "./rules/fixFormattingWhitespace.js";
 import { linkifyBareUrls } from "./rules/linkifyBareUrls.js";
 import { normalizeSpaces } from "./rules/normalizeSpaces.js";
 import { promotePseudoHeadings } from "./rules/promotePseudoHeadings.js";
+import { promoteTableHeader } from "./rules/promoteTableHeader.js";
 import { prosePreToParagraph } from "./rules/prosePreToParagraph.js";
 import { removeEmptyBlocks } from "./rules/removeEmptyBlocks.js";
+import { simplifyNestedFormatting } from "./rules/simplifyNestedFormatting.js";
 import { splitLeadingLabel } from "./rules/splitLeadingLabel.js";
 import { splitOnDoubleBreaks } from "./rules/splitOnDoubleBreaks.js";
 import { unwrapHeadingFormatting } from "./rules/unwrapHeadingFormatting.js";
@@ -27,6 +29,7 @@ export const RULES: ReadonlyArray<(tree: Root) => void> = [
   unwrapStyling,
   normalizeSpaces,
   fixFormattingWhitespace,
+  simplifyNestedFormatting,
   // 2. Block structure
   prosePreToParagraph,
   wrapLooseInline,
@@ -35,6 +38,7 @@ export const RULES: ReadonlyArray<(tree: Root) => void> = [
   unwrapListItemBlocks,
   removeEmptyBlocks,
   linkifyBareUrls,
+  promoteTableHeader,
   // 3. Headings
   promotePseudoHeadings,
   // 4. Leftover formatting

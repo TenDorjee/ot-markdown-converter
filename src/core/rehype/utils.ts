@@ -66,7 +66,7 @@ export function hasContent(n: ElementContent): boolean {
  */
 export function looksLikeLabel(value: string): boolean {
   const t = value.trim();
-  return t.length > 0 && t.length <= 100 && !/[.!?]$/.test(t);
+  return t.length > 0 && t.length <= 160 && !/[.!?]$/.test(t);
 }
 
 /** Visit every parent node, children first (post-order). */

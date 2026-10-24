@@ -3,13 +3,14 @@ import rehypeParse from "rehype-parse";
 import rehypeRemark from "rehype-remark";
 import remarkGfm from "remark-gfm";
 import remarkStringify from "remark-stringify";
+import { attachmentsSection } from "./attachments.js";
 import { rehypeKbArticle } from "./rehype/index.js";
 
 /**
- * Convert an article API response to Markdown (title + body only).
+ * Convert an article API response to Markdown (title, body and attachments).
  *
  * @param payload - JSON from /api/web/support/article/{id}.
- * @returns Markdown with an H1 title and the converted body.
+ * @returns Markdown with an H1 title, the converted body and an Attachments section.
  */
 export function convertArticle(payload: any): string {
   const article = payload.response;
@@ -24,5 +25,6 @@ export function convertArticle(payload: any): string {
     .use(remarkStringify, { bullet: "-", fences: true })  // Markdown tree -> text
     .processSync(article.Content);
 
-  return `# ${title}\n\n${String(body)}`;
+  const attachments = attachmentsSection(article.Attachments);
+  return `# ${title}\n\n${String(body)}${attachments ? `\n${attachments}` : ""}`;
 }

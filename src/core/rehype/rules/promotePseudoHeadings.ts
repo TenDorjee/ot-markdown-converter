@@ -1,7 +1,8 @@
 // Turn paragraphs that contain only a bold or underlined label into real headings,
 // nested under the last real heading:
 //   bold-only      -> one level below  (h2 -> h3)
-//   underline-only -> two levels below (h2 -> h4)
+//   underline-only -> two levels below (h2 -> h4), but never more than one level
+//                     below the previous heading, so no level is skipped
 //   standard KB section name (Environment, Resolution, ...) -> h2
 //
 // Example (article 1986936):
@@ -19,6 +20,10 @@
 // Example (article 2310451, which has no <h2> for its sections):
 //   HTML:   <strong>Environment</strong> <br />Advanced Authentication
 //   After:  ## Environment
+//
+// Example (article 2310451, underline label with no bold label above it):
+//   HTML:   <strong>Resolution </strong> ... <div><u>Important Considerations ...</u></div>
+//   After:  ## Resolution ... ### Important Considerations ...   (not ####, which would skip a level)
 //
 // Inline bold/underline inside a sentence, and bold sentences, are left alone.
 
@@ -44,11 +49,12 @@ function soleChild(node: Element): Element | undefined {
 }
 
 export function promotePseudoHeadings(tree: Root): void {
-  let lastHeading = 1; // the article title is the h1
+  let lastHeading = 1; // last real heading; the article title is the h1
+  let previous = 1; // previous heading of any kind, real or promoted
   visit(tree, "element", (node: Element) => {
     const real = /^h([1-6])$/.exec(node.tagName);
     if (real) {
-      lastHeading = Number(real[1]);
+      lastHeading = previous = Number(real[1]);
       return;
     }
     if (!BLOCK_TAGS.has(node.tagName)) return;
@@ -60,12 +66,15 @@ export function promotePseudoHeadings(tree: Root): void {
     const label = textOf(child).trim();
     if (!looksLikeLabel(label)) return;
 
+    let level: number;
     if (SECTION_NAMES.has(label.replace(/:$/, "").toLowerCase())) {
-      node.tagName = "h2";
+      level = 2;
       lastHeading = 2; // later labels nest under this section
     } else {
-      node.tagName = `h${Math.min(lastHeading + offset, 6)}`;
+      level = Math.min(lastHeading + offset, previous + 1, 6);
     }
+    node.tagName = `h${level}`;
+    previous = level;
     node.children = child.children; // drop the <strong>/<u> wrapper
   });
 }
