@@ -7,6 +7,9 @@
 //   4. drop leftover formatting that Markdown can't represent.
 
 import type { Root } from "hast";
+import { absolutizeUrls } from "./rules/absolutizeUrls.js";
+import { italicCodeToCode } from "./rules/italicCodeToCode.js";
+import { numberedParagraphsToList } from "./rules/numberedParagraphsToList.js";
 import { fixFormattingWhitespace } from "./rules/fixFormattingWhitespace.js";
 import { linkifyBareUrls } from "./rules/linkifyBareUrls.js";
 import { normalizeSpaces } from "./rules/normalizeSpaces.js";
@@ -30,6 +33,7 @@ export const RULES: ReadonlyArray<(tree: Root) => void> = [
   normalizeSpaces,
   fixFormattingWhitespace,
   simplifyNestedFormatting,
+  italicCodeToCode,
   // 2. Block structure
   prosePreToParagraph,
   wrapLooseInline,
@@ -37,7 +41,9 @@ export const RULES: ReadonlyArray<(tree: Root) => void> = [
   splitLeadingLabel,
   unwrapListItemBlocks,
   removeEmptyBlocks,
+  numberedParagraphsToList,
   linkifyBareUrls,
+  absolutizeUrls,
   promoteTableHeader,
   // 3. Headings
   promotePseudoHeadings,

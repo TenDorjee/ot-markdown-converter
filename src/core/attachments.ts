@@ -12,7 +12,7 @@
 // Attachments without a URL are listed by name only. Order follows the API, so the
 // output is deterministic.
 
-const SITE = "https://my.opentext.com";
+import { absoluteUrl } from "./site.js";
 
 interface Attachment {
   name?: unknown;
@@ -44,7 +44,7 @@ export function attachmentsSection(attachments: unknown): string {
     if (!name) return [];
     const href = [a.url, a.fileUrl].find((u): u is string => typeof u === "string" && u.trim() !== "");
     const size = formatSize(a.size);
-    const label = href ? `[${escapeLinkText(name)}](${new URL(href, SITE).href})` : escapeLinkText(name);
+    const label = href ? `[${escapeLinkText(name)}](${absoluteUrl(href)})` : escapeLinkText(name);
     return [`- ${label}${size ? ` (${size})` : ""}`];
   });
 

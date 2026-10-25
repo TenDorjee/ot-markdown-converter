@@ -1,7 +1,7 @@
 import { Hono } from "hono";
-import { existsSync, readFileSync } from "node:fs";
+import { fetchArticle } from "../upstream/fetchArticle.js";
 import { convert } from "../core/convert.js";
-import { ArticleNotFoundError, UpstreamFormatError } from "../core/errors.js";
+import { ArticleNotFoundError, UpstreamFormatError, UpstreamTimeoutError, UpstreamUnavailableError } from "../core/errors.js";
 
 // Article IDs are digits only (e.g. 1986936). Anything else is rejected before
 // it reaches the file system or, later, the upstream API.
@@ -15,18 +15,15 @@ export function createApp(): Hono {
 
 
 // GET the article .json and convert to markdown (from a a local copy for now)
-app.get("/v1/articles/:id", (c) => {
+app.get("/v1/articles/:id", async (c) => {               // ← async
   const id = c.req.param("id");
   if (!ARTICLE_ID.test(id)) {
     return c.json({ error: 400, message: "article id must be numeric" }, 400);
   }
 
   try {
-    const file = `tests/fixtures/${id}.json`;
-    if (!existsSync(file)) throw new ArticleNotFoundError(`no fixture for ${id}`);
-
-    const payload = JSON.parse(readFileSync(file, "utf-8"));
-    const { markdown } = convert(payload);   // may throw ArticleNotFoundError or UpstreamFormatError
+    const payload = await fetchArticle(id);              // ← live request instead of the file
+    const { markdown } = convert(payload);
 
     c.header("Content-Type", "text/markdown; charset=utf-8");
     return c.body(markdown);
@@ -34,10 +31,13 @@ app.get("/v1/articles/:id", (c) => {
     if (err instanceof ArticleNotFoundError) {
       return c.json({ error: 404, message: "article not found" }, 404);
     }
-    if (err instanceof UpstreamFormatError) {
+    if (err instanceof UpstreamTimeoutError) {
+      return c.json({ error: 504, message: "upstream timed out" }, 504);
+    }
+    if (err instanceof UpstreamFormatError || err instanceof UpstreamUnavailableError) {
       return c.json({ error: 502, message: "upstream error" }, 502);
     }
-    throw err;   // unexpected: let Hono return 500
+    throw err;
   }
 });
 

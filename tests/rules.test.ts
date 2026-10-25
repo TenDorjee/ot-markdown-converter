@@ -3,6 +3,9 @@
 
 import { describe, expect, it } from "vitest";
 import { applyRule } from "./helpers.js";
+import { absolutizeUrls } from "../src/core/rehype/rules/absolutizeUrls.js";
+import { italicCodeToCode, looksLikeCode } from "../src/core/rehype/rules/italicCodeToCode.js";
+import { numberedParagraphsToList } from "../src/core/rehype/rules/numberedParagraphsToList.js";
 import { fixFormattingWhitespace } from "../src/core/rehype/rules/fixFormattingWhitespace.js";
 import { linkifyBareUrls } from "../src/core/rehype/rules/linkifyBareUrls.js";
 import { normalizeSpaces } from "../src/core/rehype/rules/normalizeSpaces.js";
@@ -185,5 +188,53 @@ describe("promoteTableHeader", () => {
   it("leaves tables that already have a header alone", () => {
     const html = "<table><thead><tr><th>A</th></tr></thead><tbody><tr><td>1</td></tr></tbody></table>";
     expect(applyRule(promoteTableHeader, html)).toBe(html);
+  });
+});
+
+describe("absolutizeUrls", () => {
+  const src = "/api/web/support/article/attachment/3f2a?name=image001.png";
+  it("makes an image URL absolute and uses the file name as alt (1770456)", () => {
+    expect(applyRule(absolutizeUrls, `<img src="${src}">`))
+      .toBe(`<img src="https://my.opentext.com${src}" alt="image001.png">`);
+  });
+  it("keeps existing alt text", () => {
+    expect(applyRule(absolutizeUrls, `<img src="${src}" alt="Services console">`))
+      .toBe(`<img src="https://my.opentext.com${src}" alt="Services console">`);
+  });
+  it("makes a relative link absolute and leaves anchors and absolute links alone", () => {
+    expect(applyRule(absolutizeUrls, `<a href="/support/article/2341059">a</a><a href="#top">b</a><a href="https://x.com/">c</a>`))
+      .toBe(`<a href="https://my.opentext.com/support/article/2341059">a</a><a href="#top">b</a><a href="https://x.com/">c</a>`);
+  });
+});
+
+describe("numberedParagraphsToList", () => {
+  it("turns hand-numbered paragraphs into an ordered list (1770456)", () => {
+    expect(applyRule(numberedParagraphsToList,
+      "<p>1. Stop the service.</p>\n<p>2. Back up the <strong>lib</strong> folder.</p><p>3. Start the service.</p>",
+    )).toBe("<ol><li>Stop the service.</li><li>Back up the <strong>lib</strong> folder.</li><li>Start the service.</li></ol>");
+  });
+  it("keeps the number when a run starts above 1", () => {
+    expect(applyRule(numberedParagraphsToList, "<pre><code>x</code></pre><p>3. Start.</p><p>4. Check.</p>"))
+      .toBe('<pre><code>x</code></pre><ol start="3"><li>Start.</li><li>Check.</li></ol>');
+  });
+  it("leaves a single numbered paragraph, a broken sequence and bold labels alone", () => {
+    const html = "<p>1. Only one.</p><p>Text</p><p>1. A</p><p>3. C</p><p><strong>1. Label</strong></p><p><strong>2. Label</strong></p>";
+    expect(applyRule(numberedParagraphsToList, html)).toBe(html);
+  });
+});
+
+describe("italicCodeToCode", () => {
+  it("turns an italic command into inline code (1770456)", () => {
+    expect(applyRule(italicCodeToCode, "<p>Run <em>zip -q -d autopass.war WEB-INF/lib/log4j-core-2.11.0.jar</em></p>"))
+      .toBe("<p>Run <code>zip -q -d autopass.war WEB-INF/lib/log4j-core-2.11.0.jar</code></p>");
+  });
+  it("turns italic paths and file names into code", () => {
+    expect(applyRule(italicCodeToCode, "<p>Open <i>WEB-INF\\lib</i> and copy <em>log4j_2.17.0.zip </em>there</p>"))
+      .toBe("<p>Open <code>WEB-INF\\lib</code> and copy <code>log4j_2.17.0.zip</code> there</p>");
+  });
+  it("leaves italic prose alone", () => {
+    for (const t of ["not", "and/or", "Set the value to true", "service", "This is important."]) {
+      expect(looksLikeCode(t), t).toBe(false);
+    }
   });
 });

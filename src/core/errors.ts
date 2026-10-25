@@ -12,3 +12,13 @@ export class UpstreamFormatError extends Error {
   override name = "UpstreamFormatError";
 }
 
+
+/** The upstream API couldn't be reached or returned a server error. */
+export class UpstreamUnavailableError extends Error {
+  override name = "UpstreamUnavailableError";
+}
+
+/** The upstream API didn't respond within the timeout. */
+export class UpstreamTimeoutError extends Error {
+  override name = "UpstreamTimeoutError";
+}

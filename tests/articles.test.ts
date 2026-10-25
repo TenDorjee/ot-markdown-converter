@@ -8,7 +8,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { convertArticle } from "../src/core/convert.js";
+import { convert } from "../src/core/convert.js";
 import { checkConversion } from "../src/core/checks.js";
 
 const FIXTURES = join(import.meta.dirname, "fixtures");
@@ -18,15 +18,14 @@ const ids = readdirSync(FIXTURES)
   .map((f) => f.replace(/\.json$/, ""));
 
 describe.each(ids)("article %s", (id) => {
-  const payload = JSON.parse(readFileSync(join(FIXTURES, `${id}.json`), "utf-8"));
-  const markdown = convertArticle(payload);
+  const { html, markdown } = convert(JSON.parse(readFileSync(join(FIXTURES, `${id}.json`), "utf-8")));
 
   it("matches its golden snapshot", async () => {
     await expect(markdown).toMatchFileSnapshot(join("expected", `${id}.md`));
   });
 
   it("passes every check", () => {
-    const issues = checkConversion(payload.response.Content, markdown);
+    const issues = checkConversion(html, markdown);
     for (const w of issues.filter((i) => i.severity === "warning")) {
       console.warn(`[${id}] ${w.check}: ${w.detail}`);
     }

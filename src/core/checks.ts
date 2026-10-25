@@ -11,6 +11,7 @@
 import { unified } from "unified";
 import rehypeParse from "rehype-parse";
 import remarkParse from "remark-parse";
+import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import { visit } from "unist-util-visit";
 import { toString } from "mdast-util-to-string";
@@ -18,11 +19,23 @@ import { toHtml } from "hast-util-to-html";
 import type { Element, ElementContent, Root as HastRoot } from "hast";
 import type { Root as MdastRoot } from "mdast";
 import { RULES } from "./rehype/index.js";
+import { absoluteUrl } from "./site.js";
 
 export interface Issue {
   check: string;
   severity: "error" | "warning";
   detail: string;
+  /** For text-preserved: the share of source words missing (0-1). */
+  value?: number;
+}
+
+export interface CheckOptions {
+  /**
+   * Re-run the rules to confirm a second pass changes nothing. It roughly doubles the
+   * work and tests the rules rather than the article, so the API turns it off; CI and
+   * the nightly job keep it on.
+   */
+  idempotence?: boolean;
 }
 
 /** Share of source words allowed to be missing before text-preserved fails (1%). */
@@ -52,6 +65,11 @@ function markdownText(tree: MdastRoot): string {
   const parts: string[] = [];
   visit(tree, (node) => {
     if (node.type === "text" || node.type === "inlineCode" || node.type === "code") parts.push(node.value);
+    if (node.type === "image") parts.push(node.alt ?? "");
+    // "1. Stop the service" became a list: its number is now the list marker, not text.
+    if (node.type === "list" && node.ordered) {
+      node.children.forEach((_, i) => parts.push(String((node.start ?? 1) + i)));
+    }
   });
   return parts.join(" ");
 }
@@ -64,7 +82,7 @@ const parseHtml = (html: string) => unified().use(rehypeParse, { fragment: true 
 
 /** Inspect the converter's Markdown output and return every problem found. */
 export function checkMarkdown(md: string): Issue[] {
-  const tree = unified().use(remarkParse).use(remarkGfm).parse(md) as MdastRoot;
+  const tree = unified().use(remarkParse).use(remarkFrontmatter, ["yaml"]).use(remarkGfm).parse(md) as MdastRoot;
   const issues: Issue[] = [];
   const error = (check: string, detail: string) => issues.push({ check, severity: "error", detail });
 
@@ -105,6 +123,10 @@ export function checkMarkdown(md: string): Issue[] {
         if (parent?.type !== "link" && /https?:\/\/\S+/.test(node.value)) { // linkifyBareUrls
           error("no-bare-urls", snippet(node.value));
         }
+        // "1\. Stop the service" parses as text starting "1. ": a hand-numbered step.
+        if (parent?.type === "paragraph" && parent.children[0] === node && /^\d{1,3}[.)]\s/.test(node.value)) {
+          issues.push({ check: "no-hand-numbered-steps", severity: "warning", detail: snippet(node.value) }); // numberedParagraphsToList
+        }
         break;
 
       case "table": { // promoteTableHeader
@@ -114,6 +136,12 @@ export function checkMarkdown(md: string): Issue[] {
         }
         break;
       }
+
+      case "link":
+      case "image": // absolutizeUrls: a relative URL points nowhere once the Markdown leaves the site
+        if (!/^(https?:|mailto:|#)/i.test(node.url)) error("no-relative-urls", node.url);
+        if (node.type === "image" && !node.alt?.trim()) error("images-have-alt", node.url);
+        break;
 
       case "listItem": // unwrapListItemBlocks
         if (node.spread) error("no-loose-lists", snippet(toString(node)));
@@ -143,10 +171,10 @@ export function checkMarkdown(md: string): Issue[] {
  * @param html     The article's source HTML (the API's Content field).
  * @param markdown The converter's output.
  */
-export function checkConversion(html: string, markdown: string): Issue[] {
+export function checkConversion(html: string, markdown: string, options: CheckOptions = {}): Issue[] {
   const issues = checkMarkdown(markdown);
   const source = parseHtml(html);
-  const md = unified().use(remarkParse).use(remarkGfm).parse(markdown) as MdastRoot;
+  const md = unified().use(remarkParse).use(remarkFrontmatter, ["yaml"]).use(remarkGfm).parse(markdown) as MdastRoot;
 
   // Content preservation (not tied to one rule): every source word should survive.
   const outputWords = new Set(words(markdownText(md)));
@@ -158,18 +186,21 @@ export function checkConversion(html: string, markdown: string): Issue[] {
       check: "text-preserved",
       severity: share > MAX_MISSING_WORDS ? "error" : "warning",
       detail: `${missing.length} of ${sourceWords.length} words missing, e.g. "${[...new Set(missing)].slice(0, 5).join('", "')}"`,
+      value: share,
     });
   }
 
-  // Every link in the source is still a link in the output.
+  // Every link in the source is still a link in the output (relative ones made absolute).
   const outputUrls = new Set<string>();
   visit(md, "link", (node) => {
     outputUrls.add(node.url);
   });
   visit(source, "element", (node: Element) => {
     const href = node.tagName === "a" ? node.properties?.href : undefined;
-    if (typeof href === "string" && /^https?:/.test(href) && !outputUrls.has(href)) {
-      issues.push({ check: "links-preserved", severity: "error", detail: href });
+    if (typeof href !== "string" || href.trim() === "" || href.startsWith("#")) return;
+    const url = absoluteUrl(href);
+    if (/^https?:/.test(url) && !outputUrls.has(url)) {
+      issues.push({ check: "links-preserved", severity: "error", detail: url });
     }
   });
 
@@ -191,13 +222,15 @@ export function checkConversion(html: string, markdown: string): Issue[] {
 
   // Idempotence (not tied to one rule): a second pass of the rules must change nothing.
   // If it does, the first pass left something half-cleaned, usually a rule-order issue.
-  const tree = parseHtml(html);
-  for (const rule of RULES) rule(tree);
-  const once = toHtml(tree);
-  for (const rule of RULES) rule(tree);
-  if (toHtml(tree) !== once) {
-    issues.push({ check: "rules-idempotent", severity: "error",
-      detail: "running the rules a second time changed the HTML" });
+  if (options.idempotence !== false) {
+    const tree = parseHtml(html);
+    for (const rule of RULES) rule(tree);
+    const once = toHtml(tree);
+    for (const rule of RULES) rule(tree);
+    if (toHtml(tree) !== once) {
+      issues.push({ check: "rules-idempotent", severity: "error",
+        detail: "running the rules a second time changed the HTML" });
+    }
   }
 
   // HTML tags no rule has seen: possibly a new article format.
@@ -210,4 +243,28 @@ export function checkConversion(html: string, markdown: string): Issue[] {
   }
 
   return issues;
+}
+
+// ----------------------------------------------------------------------------
+// Quality tier, used by the API to decide how to log and cache a conversion
+// ----------------------------------------------------------------------------
+
+export type QualityTier = "ok" | "warning" | "error" | "critical";
+
+/** Share of missing words above which a conversion is treated as badly broken. */
+export const CRITICAL_MISSING_WORDS = 0.2;
+
+/**
+ * Summarise check results:
+ *   critical - most of the text is lost: serve, but cache only briefly and alert
+ *   error    - something is wrong (a lost link, leftover HTML): serve, log, count
+ *   warning  - worth a look (an unknown tag): serve, log
+ *   ok       - no issues
+ */
+export function qualityTier(issues: Issue[]): QualityTier {
+  const textLoss = issues.find((i) => i.check === "text-preserved")?.value ?? 0;
+  if (textLoss > CRITICAL_MISSING_WORDS) return "critical";
+  if (issues.some((i) => i.severity === "error")) return "error";
+  if (issues.length) return "warning";
+  return "ok";
 }
