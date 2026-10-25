@@ -8,7 +8,9 @@
     "convert": "tsx src/cli/convert.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "check": "tsx src/cli/check.ts"
+    "check": "tsx src/cli/check.ts",
+    "dev": "tsx watch src/api/server.ts",
+    "start": "tsx src/api/server.ts"
   },
   "repository": {
     "type": "git",
@@ -17,6 +19,8 @@
   "homepage": "https://github.com/TenDorjee/ot-markdown-converter#readme",
   "license": "ISC",
   "dependencies": {
+    "@hono/node-server": "^2.1.5",
+    "hono": "^4.13.13",
     "js-yaml": "^5.5.0",
     "mdast-util-to-string": "^4.0.0",
     "rehype-parse": "^9.0.1",
