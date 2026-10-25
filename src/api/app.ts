@@ -2,6 +2,9 @@ import { Hono } from "hono";
 import { fetchArticle } from "../upstream/fetchArticle.js";
 import { convert } from "../core/convert.js";
 import { ArticleNotFoundError, UpstreamFormatError, UpstreamTimeoutError, UpstreamUnavailableError } from "../core/errors.js";
+import type { QualityTier } from "../core/checks.js";  
+import { checkConversion, qualityTier } from "../core/checks.js"; 
+
 
 // Article IDs are digits only (e.g. 1986936). Anything else is rejected before
 // it reaches the file system or, later, the upstream API.
@@ -18,7 +21,15 @@ const CACHE_OK = "public, max-age=300, s-maxage=86400, stale-while-revalidate=86
 const CACHE_NOT_FOUND = "public, max-age=60, s-maxage=60";
 
 const CACHE_NEVER = "no-store";
+const CACHE_CRITICAL = "public, max-age=60, s-maxage=60";
 
+
+const SEVERITY: Record<QualityTier, string> = {
+  ok: "INFO",
+  warning: "WARNING",
+  error: "ERROR",
+  critical: "CRITICAL",
+};
 
 /** Gets an article's JSON by ID. The server passes the live one; tests pass fixtures. */
 export type ArticleFetcher = (id: string) => Promise<unknown>;
@@ -41,12 +52,23 @@ export function createApp({ fetchArticle }: AppOptions): Hono {
 
     try {
       const payload = await fetchArticle(id);
-      const { markdown } = convert(payload);
+      const { markdown, html } = convert(payload);
+
+      const issues = checkConversion(html, markdown, { idempotence: false });
+      const quality = qualityTier(issues);
+      console.log(JSON.stringify({
+        severity: SEVERITY[quality],
+        message: `converted article ${id}: ${quality}`,
+        articleId: id,
+        quality,
+        issues: issues.map((i) => ({ check: i.check, severity: i.severity, detail: i.detail })),
+      }));
+
       c.header("Content-Type", "text/markdown; charset=utf-8");
-      c.header("Cache-Control", CACHE_OK);
-      // Groups every cached version of this article (e.g. ?format=json) so one
-      // purge on publish clears them all. The CDN strips it before responding.
+      c.header("Cache-Control", quality === "critical" ? CACHE_CRITICAL : CACHE_OK);
+
       c.header("Edge-Cache-Tag", `article-${id}`);
+      c.header("X-Conversion-Quality", quality);
       return c.body(markdown);
     } catch (err) {
       if (err instanceof ArticleNotFoundError) {

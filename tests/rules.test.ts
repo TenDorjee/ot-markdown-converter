@@ -197,6 +197,11 @@ describe("absolutizeUrls", () => {
     expect(applyRule(absolutizeUrls, `<img src="${src}">`))
       .toBe(`<img src="https://my.opentext.com${src}" alt="image001.png">`);
   });
+  it("uses \"image\" when the URL has only an attachment ID (1770456)", () => {
+    const id = "/api/web/support/article/attachment/042c4248-f739-4fd2-9b28-4f3fb0394fa0";
+    expect(applyRule(absolutizeUrls, `<img src="${id}">`))
+      .toBe(`<img src="https://my.opentext.com${id}" alt="image">`);
+  });
   it("keeps existing alt text", () => {
     expect(applyRule(absolutizeUrls, `<img src="${src}" alt="Services console">`))
       .toBe(`<img src="https://my.opentext.com${src}" alt="Services console">`);
@@ -217,6 +222,19 @@ describe("numberedParagraphsToList", () => {
     expect(applyRule(numberedParagraphsToList, "<pre><code>x</code></pre><p>3. Start.</p><p>4. Check.</p>"))
       .toBe('<pre><code>x</code></pre><ol start="3"><li>Start.</li><li>Check.</li></ol>');
   });
+  it("continues a real list with hand-numbered <div> steps, keeping screenshots with their step (1770456)", () => {
+    expect(applyRule(numberedParagraphsToList,
+      '<ol><li>Stop the APLS service.</li></ol><div><img src="a.png"></div>' +
+      "<div>     2. Navigate to lib folder</div><div>     3. Backup three jar files</div><img src=\"b.png\">" +
+      "<div>     4. Download the zip</div>",
+    )).toBe('<ol><li>Stop the APLS service.<br><img src="a.png"></li><li>Navigate to lib folder</li>' +
+      '<li>Backup three jar files<br><img src="b.png"></li><li>Download the zip</li></ol>');
+  });
+  it("resumes the numbering after a note (1770456)", () => {
+    expect(applyRule(numberedParagraphsToList,
+      "<p>1) Stop the APLS service</p><p>2) In Windows:</p><p>open WAR file with WINRAR</p><p>3) start the service</p>",
+    )).toBe('<ol><li>Stop the APLS service</li><li>In Windows:</li></ol><p>open WAR file with WINRAR</p><ol start="3"><li>start the service</li></ol>');
+  });
   it("leaves a single numbered paragraph, a broken sequence and bold labels alone", () => {
     const html = "<p>1. Only one.</p><p>Text</p><p>1. A</p><p>3. C</p><p><strong>1. Label</strong></p><p><strong>2. Label</strong></p>";
     expect(applyRule(numberedParagraphsToList, html)).toBe(html);
@@ -227,6 +245,10 @@ describe("italicCodeToCode", () => {
   it("turns an italic command into inline code (1770456)", () => {
     expect(applyRule(italicCodeToCode, "<p>Run <em>zip -q -d autopass.war WEB-INF/lib/log4j-core-2.11.0.jar</em></p>"))
       .toBe("<p>Run <code>zip -q -d autopass.war WEB-INF/lib/log4j-core-2.11.0.jar</code></p>");
+  });
+  it("turns an italic service command into code (1770456)", () => {
+    expect(applyRule(italicCodeToCode, "<span><em>service aplsLicenseServer stop</em></span>"))
+      .toBe("<span><code>service aplsLicenseServer stop</code></span>");
   });
   it("turns italic paths and file names into code", () => {
     expect(applyRule(italicCodeToCode, "<p>Open <i>WEB-INF\\lib</i> and copy <em>log4j_2.17.0.zip </em>there</p>"))

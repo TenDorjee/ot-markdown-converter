@@ -1,9 +1,10 @@
 // Turn commands, paths and file names written in italics into inline code.
 //
-// Example (article 1770456, removing the JAR on Linux):
-//   HTML:   <p>Run <em>zip -q -d autopass.war WEB-INF/lib/log4j-core-2.11.0.jar</em></p>
-//   Before: Run *zip -q -d autopass.war WEB-INF/lib/log4j-core-2.11.0.jar*
-//   After:  Run `zip -q -d autopass.war WEB-INF/lib/log4j-core-2.11.0.jar`
+// Example (article 1770456, "For Linux" mitigation steps):
+//   HTML:   <li>Stop the APLS service. Using below command</li></ol>
+//           <span><em>service aplsLicenseServer stop</em></span>
+//   Before: *service aplsLicenseServer stop*
+//   After:  `service aplsLicenseServer stop`
 //
 // The author used italics to mean "type this". In Markdown, italics are emphasis:
 // underscores and asterisks inside them can be mangled, and a reader (or an LLM)
@@ -16,8 +17,9 @@
 import type { Element, ElementContent, Root } from "hast";
 import { eachParent, isElement, mapChildren, text, textOf } from "../utils.js";
 
-// A common command followed by an argument, "java -...", "./script" or "C:\...".
-const COMMAND = /^(?:(?:sudo|zip|unzip|tar|cd|cp|mv|rm|mkdir|ls|chmod|chown|systemctl)\s+\S|java\s+-|\.\/|[a-z]:\\)/i;
+// A common command followed by an argument, "service <name> start|stop|...",
+// "java -...", "./script" or "C:\...". ("service" alone is too common in prose.)
+const COMMAND = /^(?:(?:sudo|zip|unzip|tar|cd|cp|mv|rm|mkdir|ls|chmod|chown|systemctl)\s+\S|service\s+\S+\s+(?:start|stop|restart|status)\b|java\s+-|\.\/|[a-z]:\\)/i;
 // A path: any backslash (WEB-INF\lib), a leading / or ./ or ~/, or two slashes (/opt/x).
 // "and/or" has one slash and is not a path.
 const PATH = /\\|^[.~]?\/|\S\/\S*\//;
