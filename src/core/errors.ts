@@ -11,3 +11,4 @@ export class ArticleNotFoundError extends Error {
 export class UpstreamFormatError extends Error {
   override name = "UpstreamFormatError";
 }
+
