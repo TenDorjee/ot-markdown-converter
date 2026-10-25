@@ -9,7 +9,7 @@
 
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { convertArticle } from "../core/convert.js";
+import { convert } from "../core/convert.js";
 import { checkConversion } from "../core/checks.js";
 import type { Issue } from "../core/checks.js";
 
@@ -28,10 +28,11 @@ let failed = 0;
 for (const file of files) {
   let issues: Issue[];
   try {
-    const payload = JSON.parse(readFileSync(join(dir, file), "utf-8"));
-    issues = checkConversion(payload.response.Content, convertArticle(payload));
+    const { html, markdown } = convert(JSON.parse(readFileSync(join(dir, file), "utf-8")));
+    issues = checkConversion(html, markdown);
   } catch (err) {
-    issues = [{ check: "convert-failed", severity: "error", detail: String(err) }];
+    const detail = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    issues = [{ check: "convert-failed", severity: "error", detail }];
   }
 
   const errors = issues.filter((i) => i.severity === "error");

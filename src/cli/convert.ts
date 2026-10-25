@@ -8,5 +8,11 @@ if (!file) {
   process.exit(1);
 }
 
-const payload = JSON.parse(readFileSync(file, "utf-8"));
-process.stdout.write(convertArticle(payload));
+try {
+  const payload: unknown = JSON.parse(readFileSync(file, "utf-8"));
+  process.stdout.write(convertArticle(payload));
+} catch (err) {
+  // e.g. "ArticleNotFoundError: the article is not public"
+  console.error(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+  process.exit(1);
+}
