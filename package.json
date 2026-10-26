@@ -5,6 +5,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "build": "tsc",
     "convert": "tsx src/cli/convert.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
