@@ -1,0 +1,31 @@
+# Runs on every push and pull request: typecheck, test, compile, build the image.
+# Everything is offline 
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm            # reuse downloaded packages between runs
+
+      - run: npm ci           
+      - run: npm run typecheck
+      - run: npm test           # rules, golden files, checks on every fixture
+      - run: npm run build      # same as Dockerfile run
+
+  docker:
+    needs: test                 # only build the image if the tests passed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t kb-markdown:${{ github.sha }} .
